@@ -25,4 +25,4 @@ jobs:
 
       - name: Exécuter le bot (Timeout à 5h)
         run: |
-          timeout 18000s python bot.py || true
+          timeout 18000s python -u bot.py || true
