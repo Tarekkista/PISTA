@@ -19,7 +19,7 @@ TRADE_SIZE = 100
 THRESHOLD = 0.25       # Seuil d'achat IA (55%)
 
 TOKENS = [
-   'SAND/USDT', 'DMC/USDT',
+   'SAND/USDT', 'DMC/USDT', 'BIGTIME/USDT',
     'UP/USDT', 'ENJ/USDT', 'MANA/USDT'
 ]
 
