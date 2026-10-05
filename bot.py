@@ -150,7 +150,7 @@ for symbol in TOKENS:
     df = fetch_ohlcv_extended(symbol, TIMEFRAME, CANDLES_TO_FETCH)
     if len(df) >= SEQ_LEN + HORIZON:
         raw_data[symbol] = df
-        print(f"  ✅ {symbol:<10} : {len(df)} bougies.")
+        print(f"   ✅ {symbol:<10} : {len(df)} bougies.")
 
 X, y = [], []
 # Utilisation d'un pas (stride) de 2 pour limiter la consommation de RAM
@@ -241,7 +241,7 @@ def scan_and_trade():
             features = extract_features(df).reshape(1, -1)
             
             prob = model.predict_proba(features)[0]
-            print(f"  👉 {symbol:<10} | Confiance IA : {prob*100:.1f}%")
+            print(f"   👉 {symbol:<10} | Confiance IA : {prob*100:.1f}%")
             
             if prob >= THRESHOLD:
                 open_positions.append({
@@ -265,7 +265,18 @@ try:
         losses = sum(1 for t in trade_history if 'LOSS' in t['result'])
         win_rate = (wins / len(trade_history) * 100) if len(trade_history) > 0 else 0
         
-        print(f"📊 Capital: ${capital:.2f} | Positions: {len(open_positions)} | Trades: {len(trade_history)} | Win Rate: {win_rate:.1f}%")
+        print(f"\n📊 --- STATISTIQUES GLOBALES ---")
+        print(f"Capital: ${capital:.2f} | Positions: {len(open_positions)} | Trades: {len(trade_history)} | Win Rate: {win_rate:.1f}%")
+        
+        print(f"📌 --- STATISTIQUES PAR TOKEN ---")
+        for token in TOKENS:
+            token_trades = [t for t in trade_history if t['symbol'] == token]
+            t_count = len(token_trades)
+            t_wins = sum(1 for t in token_trades if 'WIN' in t['result'])
+            t_pnl = sum(t['pnl'] for t in token_trades)
+            t_wr = (t_wins / t_count * 100) if t_count > 0 else 0.0
+            print(f"  • {token:<12} | Trades: {t_count:<3} | Win Rate: {t_wr:>5.1f}% | PnL: ${t_pnl:>+6.2f}")
+            
         print("-" * 55)
         time.sleep(60)
 except KeyboardInterrupt:
