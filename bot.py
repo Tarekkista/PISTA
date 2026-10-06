@@ -9,14 +9,14 @@ from datetime import datetime
 # ==========================================
 TIMEFRAME = '1m'
 SEQ_LEN = 60           # 60 minutes de contexte
-HORIZON = 30           # Horizon max de trade = 10 minutes
+HORIZON = 45           # Horizon max de trade = 10 minutes
 TP_PCT = 0.009        # Target +0.65%
 SL_PCT = 0.003       # Stop Loss -0.25%
-CANDLES_TO_FETCH = 1000 # Réduit à 500 bougies (~8h) pour ne pas saturer la RAM
+CANDLES_TO_FETCH = 1500 # Réduit à 500 bougies (~8h) pour ne pas saturer la RAM
 
 INITIAL_CAPITAL = 1000
 TRADE_SIZE = 100
-THRESHOLD = 0.25       # Seuil d'achat IA (55%)
+THRESHOLD = 0.3       # Seuil d'achat IA (55%)
 
 TOKENS = [
    'PUMPBTC/USDT', 'KAIO/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'SOON/USDT'
