@@ -14,13 +14,13 @@ warnings.filterwarnings('ignore')
 TIMEFRAME = '1m'
 SEQ_LEN = 60            # 60 bougies pour calculer les indicateurs
 HORIZON = 45           # Durée max du trade (45 min)
-TP_PCT = 0.012         # Take Profit : +1.2%
-SL_PCT = 0.008         # Stop Loss : -0.8%
+TP_PCT = 0.009         # Take Profit : +1.2%
+SL_PCT = 0.003         # Stop Loss : -0.8%
 CANDLES_TO_FETCH = 1500 # Historique de données (~25h)
 
 INITIAL_CAPITAL = 1000
 TRADE_SIZE = 100
-THRESHOLD = 0.45       # Seuil de probabilité IA pour entrer (55%)
+THRESHOLD = 0.4       # Seuil de probabilité IA pour entrer (55%)
 
 TOKENS = [
     'RLC/USDT', 'DMC/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'KAIO/USDT'
