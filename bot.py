@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 import lightgbm as lgb
 import warnings
+
 warnings.filterwarnings('ignore')
 
 # ==========================================
@@ -31,7 +32,7 @@ exchange = ccxt.bitget({'enableRateLimit': True})
 # 2. FEATURE ENGINEERING QUANTITATIF
 # ==========================================
 def compute_features(df):
-    """Calcule 10 indicateurs stationnaires et pertinents pour le scalping 1m."""
+    """Calcule 9 indicateurs stationnaires et pertinents pour le scalping 1m."""
     df = df.copy()
     close = df['close']
     high = df['high']
@@ -68,7 +69,7 @@ def compute_features(df):
     # 6. Intraday Range / Spread High-Low
     df['hl_spread'] = (high - low) / close
     
-    # Nettoyage des NaN dus aux rolling windows
+    # Features finales nettoyées des NaN
     features = ['ret_1', 'ret_3', 'ret_5', 'ret_15', 'rsi_14', 'atr_norm', 'bb_pct', 'vol_zscore', 'hl_spread']
     return df, features
 
