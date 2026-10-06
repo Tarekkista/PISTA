@@ -1,3 +1,5 @@
 ccxt
 numpy
 pandas
+lightgbm
+scikit-learn
