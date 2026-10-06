@@ -16,7 +16,7 @@ CANDLES_TO_FETCH = 1500 # Réduit à 500 bougies (~8h) pour ne pas saturer la RA
 
 INITIAL_CAPITAL = 1000
 TRADE_SIZE = 100
-THRESHOLD = 0.33       # Seuil d'achat IA (55%)
+THRESHOLD = 0.59       # Seuil d'achat IA (55%)
 
 TOKENS = [
    'RLC/USDT', 'DMC/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'KAIO/USDT'
