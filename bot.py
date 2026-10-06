@@ -19,7 +19,7 @@ TRADE_SIZE = 100
 THRESHOLD = 0.33       # Seuil d'achat IA (55%)
 
 TOKENS = [
-   'PUMPBTC/USDT', 'KAIO/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'SOON/USDT'
+   'RLC/USDT', 'DMC/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'KAIO/USDT'
 ]
 
 exchange = ccxt.bitget({'enableRateLimit': True})
