@@ -8,7 +8,7 @@ from datetime import datetime
 # 1. CONFIGURATION STRATÉGIQUE (1M)
 # ==========================================
 TIMEFRAME = '1m'
-EMA_FILTER_PERIOD = 100 # Filtre de tendance sur 200 bougies
+EMA_FILTER_PERIOD = 9 # Filtre de tendance sur 200 bougies
 ATR_PERIOD = 14          # Période ATR
 ATR_MULTIPLIER = 1.8    # Trailing Stop multiplier
 CANDLES_TO_FETCH = 250  # Historique suffisant pour l'EMA 200
