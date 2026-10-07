@@ -11,12 +11,12 @@ warnings.filterwarnings('ignore')
 # ==========================================
 # 1. CONFIGURATION STRATÉGIQUE & RAM
 # ==========================================
-TIMEFRAME = '1m'
+TIMEFRAME = '3m'
 SEQ_LEN = 60            # 60 bougies pour calculer les indicateurs
 HORIZON = 45           # Durée max du trade (45 min)
 TP_PCT = 0.009         # Take Profit : +1.2%
 SL_PCT = 0.003         # Stop Loss : -0.8%
-CANDLES_TO_FETCH = 1500 # Historique de données (~25h)
+CANDLES_TO_FETCH = 1000 # Historique de données (~25h)
 
 INITIAL_CAPITAL = 1000
 TRADE_SIZE = 100
