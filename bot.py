@@ -11,7 +11,7 @@ warnings.filterwarnings('ignore')
 # ==========================================
 # 1. CONFIGURATION STRATÉGIQUE & RAM
 # ==========================================
-TIMEFRAME = '3m'
+TIMEFRAME = '15m'
 SEQ_LEN = 60            # 60 bougies pour calculer les indicateurs
 HORIZON = 45           # Durée max du trade (45 min)
 TP_PCT = 0.009         # Take Profit : +1.2%
