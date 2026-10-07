@@ -20,7 +20,7 @@ CANDLES_TO_FETCH = 500 # Historique de données (~25h)
 
 INITIAL_CAPITAL = 1000
 TRADE_SIZE = 100
-THRESHOLD = 0.53       # Seuil de probabilité IA pour entrer (55%)
+THRESHOLD = 0.50       # Seuil de probabilité IA pour entrer (55%)
 
 TOKENS = [
     'RLC/USDT', 'DMC/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'KAIO/USDT'
