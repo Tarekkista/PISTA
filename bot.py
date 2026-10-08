@@ -1,13 +1,16 @@
 import ccxt
 import numpy as np
 import pandas as pd
+from datetime import datetime
 
 # ==========================================
 # 1. PARAMÈTRES DU BACKTEST
 # ==========================================
 SYMBOL = 'DMC/USDT'
 TIMEFRAME = '1m'
-CANDLES_TO_FETCH = 1000  # Nombre de bougies (Bitget limite à 1000 par appel standard)
+
+START_DATE = '2026-07-01'  # Date début
+END_DATE = '2026-12-31'    # Date fin
 
 EMA_PERIOD = 100
 ATR_PERIOD = 14
@@ -19,12 +22,24 @@ TRADE_SIZE = 150.0
 # ==========================================
 # 2. CHARGEMENT DES DONNÉES HISTORIQUES
 # ==========================================
-print(f"📥 Téléchargement de {CANDLES_TO_FETCH} bougies 1M pour {SYMBOL}...")
+print(f"📥 Téléchargement de {SYMBOL} du {START_DATE} au {END_DATE}...")
 exchange = ccxt.bitget()
-ohlcv = exchange.fetch_ohlcv(SYMBOL, timeframe=TIMEFRAME, limit=CANDLES_TO_FETCH)
 
-df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+start_ts = exchange.parse8601(START_DATE + 'T00:00:00Z')
+end_ts = exchange.parse8601(END_DATE + 'T23:59:59Z')
+
+all_candles = []
+since = start_ts
+while since < end_ts:
+    ohlcv = exchange.fetch_ohlcv(SYMBOL, timeframe=TIMEFRAME, since=since, limit=1000)
+    if not ohlcv:
+        break
+    all_candles.extend(ohlcv)
+    since = ohlcv[-1][0] + 60000
+
+df = pd.DataFrame(all_candles, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
 df['datetime'] = pd.to_datetime(df['timestamp'], unit='ms')
+df['month'] = df['datetime'].dt.to_period('M')
 
 # ==========================================
 # 3. MOTEUR DE BACKTEST
@@ -56,6 +71,7 @@ def run_backtest(df_input, window_size):
         high = row['high']
         low = row['low']
         atr = row['atr']
+        month = row['month']
         
         # 1. Gestion de la position ouverte
         if in_position:
@@ -72,6 +88,7 @@ def run_backtest(df_input, window_size):
                 capital += pnl_usd
                 
                 trades_history.append({
+                    'month': month,
                     'entry_time': df.iloc[i]['datetime'],
                     'result': 'WIN' if pnl_usd >= 0 else 'LOSS',
                     'pnl': pnl_usd
@@ -89,25 +106,35 @@ def run_backtest(df_input, window_size):
                 entry_price = close
                 trailing_sl = entry_price - (atr * ATR_MULTIPLIER)
 
-    # Statistiques
-    total_trades = len(trades_history)
-    wins = sum(1 for t in trades_history if t['result'] == 'WIN')
-    win_rate = (wins / total_trades * 100) if total_trades > 0 else 0.0
-    pnl_total = capital - INITIAL_CAPITAL
-
-    return capital, total_trades, win_rate, pnl_total
+    return capital, trades_history, df
 
 # ==========================================
-# 4. EXÉCUTION COMPARATIVE
+# 4. EXÉCUTION ET RÉSULTATS PAR MOIS
 # ==========================================
-cap_30, trades_30, wr_30, pnl_30 = run_backtest(df, window_size=30)
-cap_60, trades_60, wr_60, pnl_60 = run_backtest(df, window_size=60)
+cap_30, trades_30, df_30 = run_backtest(df, window_size=30)
+cap_60, trades_60, df_60 = run_backtest(df, window_size=60)
 
-print(f"\n📊 ==================== RÉSULTATS DU BACKTEST ({SYMBOL}) ====================")
-print(f"Période analysée : {df['datetime'].iloc[0]} ➔ {df['datetime'].iloc[-1]}")
-print("-" * 75)
-print(f"{'BOT':<15} | {'CAPITAL FINAL':<14} | {'PNL TOTAL ($)':<14} | {'TRADES':<8} | {'WIN RATE':<10}")
-print("-" * 75)
-print(f"{'DONCHIAN 30M':<15} | ${cap_30:<13.2f} | ${pnl_30:<+13.2f} | {trades_30:<8} | {wr_30:.1f}%")
-print(f"{'DONCHIAN 60M':<15} | ${cap_60:<13.2f} | ${pnl_60:<+13.2f} | {trades_60:<8} | {wr_60:.1f}%")
-print("=" * 75)
+print(f"\n📊 ==================== RÉSULTATS PAR MOIS ({SYMBOL}) ====================")
+print(f"Période analysée : {START_DATE} ➔ {END_DATE}")
+print("=" * 100)
+
+for window, trades in [("DONCHIAN 30M", trades_30), ("DONCHIAN 60M", trades_60)]:
+    print(f"\n{window}")
+    print("-" * 100)
+    print(f"{'MOIS':<12} | {'TRADES':<8} | {'GAGNANTS':<10} | {'PERDANTS':<10} | {'PNL TOTAL ($)':<15} | {'WIN RATE':<10}")
+    print("-" * 100)
+    
+    trades_df = pd.DataFrame(trades)
+    if len(trades_df) > 0:
+        for month, group in trades_df.groupby('month'):
+            total = len(group)
+            wins = len(group[group['result'] == 'WIN'])
+            losses = len(group[group['result'] == 'LOSS'])
+            pnl = group['pnl'].sum()
+            wr = (wins / total * 100) if total > 0 else 0
+            
+            print(f"{str(month):<12} | {total:<8} | {wins:<10} | {losses:<10} | ${pnl:<+14.2f} | {wr:<10.1f}%")
+    else:
+        print("Aucun trade")
+    
+    print("=" * 100)
