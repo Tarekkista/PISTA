@@ -5,7 +5,7 @@ import pandas as pd
 # ==========================================
 # 1. PARAMÈTRES DU BACKTEST
 # ==========================================
-SYMBOL = 'RLC/USDT'
+SYMBOL = 'DMC/USDT'
 TIMEFRAME = '1m'
 CANDLES_TO_FETCH = 1000  # Nombre de bougies (Bitget limite à 1000 par appel standard)
 
