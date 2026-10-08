@@ -162,15 +162,3 @@ print("-" * 75)
 print(f"{'DONCHIAN 30M':<15} | ${cap_30:<13.2f} | ${pnl_30:<+13.2f} | {trades_30:<8} | {wr_30:.1f}%")
 print(f"{'DONCHIAN 60M':<15} | ${cap_60:<13.2f} | ${pnl_60:<+13.2f} | {trades_60:<8} | {wr_60:.1f}%")
 print("=" * 75)
-```
-
-**Là, oui :** tu changes seulement :
-
-```python
-START_DATE = '2026-09-01 00:00:00'
-END_DATE   = '2026-09-30 23:59:00'
-```
-
-et le script récupère automatiquement toutes les bougies 1m de cette période, même si elle contient plusieurs jours.
-
-Le **moteur Donchian 30/60, EMA, ATR, trailing stop, capital, taille des trades et calcul du win rate n'ont pas été modifiés.**
