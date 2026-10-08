@@ -1,4 +1,3 @@
-```python
 import ccxt
 import numpy as np
 import pandas as pd
@@ -247,13 +246,3 @@ print(
 )
 
 print("=" * 75)
-```
-
-Pour changer la période, tu modifies **seulement ces deux lignes** :
-
-```python
-START_DATE = '2026-09-01 00:00:00'
-END_DATE   = '2026-10-30 23:59:00'
-```
-
-Le reste est inchangé.
