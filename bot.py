@@ -8,16 +8,16 @@ from datetime import datetime
 # 1. CONFIGURATION STRATÉGIQUE (1M)
 # ==========================================
 TIMEFRAME = '1m'
-EMA_FILTER_PERIOD = 9 # Filtre de tendance sur 200 bougies
+EMA_FILTER_PERIOD = 100  # Filtre de tendance sur 200 bougies
 ATR_PERIOD = 14          # Période ATR
-ATR_MULTIPLIER = 1.8    # Trailing Stop multiplier
-CANDLES_TO_FETCH = 250  # Historique suffisant pour l'EMA 200
+ATR_MULTIPLIER = 1.8     # Trailing Stop multiplier
+CANDLES_TO_FETCH = 250   # Historique suffisant pour l'EMA 200
 
 INITIAL_CAPITAL = 1000.0
 TRADE_SIZE = 150.0
 
 TOKENS = [
-    'RLC/USDT', 'DMC/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'KAIO/USDT', 'BTW/USDT', 'SOON/USDT', 'MAGMA/USDT', 'BTC/USDT', 'XRP/USDT', 'VELVET/USDT'
+    'RLC/USDT', 'DMC/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'KAIO/USDT'
 ]
 
 exchange = ccxt.bitget({'enableRateLimit': True})
@@ -180,6 +180,27 @@ try:
             total = len(bot['history'])
             wr = (wins / total * 100) if total > 0 else 0.0
             print(f"{bot['name']:<15} | ${bot['capital']:<9.2f} | {len(bot['positions']):<15} | {total:<8} | {wr:.1f}%")
+        print("=" * 68)
+
+        # ==========================================
+        # 6. DÉTAIL DES PERFORMANCES PAR TOKEN
+        # ==========================================
+        print(f"\n📈 {'='*18} DÉTAIL DES TRADES PAR TOKEN {'='*18}")
+        print(f"{'TOKEN':<10} | {'BOT':<13} | {'TRADES':<7} | {'WIN RATE':<9} | {'PnL TOT ($)':<12}")
+        print("-" * 68)
+
+        for symbol in TOKENS:
+            for bot in BOTS:
+                token_trades = [t for t in bot['history'] if t['symbol'] == symbol]
+                total_t = len(token_trades)
+                
+                if total_t > 0:
+                    wins_t = sum(1 for t in token_trades if t['result'] == 'WIN')
+                    wr_t = (wins_t / total_t) * 100
+                    pnl_t = sum(t['pnl'] for t in token_trades)
+                    print(f"{symbol:<10} | {bot['name']:<13} | {total_t:<7} | {wr_t:<8.1f}% | ${pnl_t:<+11.2f}")
+                else:
+                    print(f"{symbol:<10} | {bot['name']:<13} | 0       | 0.0%      | $0.00       ")
         print("=" * 68)
         
         time.sleep(15)
