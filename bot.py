@@ -13,13 +13,11 @@ ATR_PERIOD = 14          # Période ATR
 ATR_MULTIPLIER = 1.8    # Trailing Stop multiplier
 CANDLES_TO_FETCH = 250  # Historique suffisant pour l'EMA 200
 
-SCAN_INTERVAL = 2       # Intervalle de scan en secondes
-
 INITIAL_CAPITAL = 1000.0
 TRADE_SIZE = 150.0
 
 TOKENS = [
-    'RLC/USDT', 'DMC/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'KAIO/USDT'
+    'US/USDT', 'STRK/USDT', 'RLC/USDT', 'BTW/USDT', 'KAIO/USDT', 'JCT/USDT', 'ORCA/USDT', 'DMC/USDT', 'OGN/USDT'
 ]
 
 exchange = ccxt.bitget({'enableRateLimit': True})
@@ -167,7 +165,7 @@ print("\n🤖 BOT COMPARATIF ACTIF (DONCHIAN 30M vs DONCHIAN 60M)")
 try:
     while True:
         timestamp_str = datetime.now().strftime('%H:%M:%S')
-        print(f"\n🔍 ==================== SCAN ({timestamp_str}) ====================")
+        print(f"\n🔍 ==================== SCAN 1M ({timestamp_str}) ====================")
         
         for bot in BOTS:
             manage_positions(bot)
@@ -184,7 +182,7 @@ try:
             print(f"{bot['name']:<15} | ${bot['capital']:<9.2f} | {len(bot['positions']):<15} | {total:<8} | {wr:.1f}%")
         print("=" * 68)
         
-        time.sleep(SCAN_INTERVAL)
+        time.sleep(2)
         
 except KeyboardInterrupt:
     print("\n🛑 Bot comparatif arrêté proprement.")
