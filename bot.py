@@ -2,6 +2,7 @@ import ccxt
 import numpy as np
 import pandas as pd
 import time
+import os
 from datetime import datetime
 
 # ==========================================
@@ -17,8 +18,18 @@ INITIAL_CAPITAL = 1000.0
 TRADE_SIZE = 150.0
 
 TOKENS = [
-    'RLC/USDT', 'DMC/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'KAIO/USDT', 'SOON/USDT', 'VELVET/USDT', 'ALLO/USDT', 'BTC/USDT', 'XRP/USDT', 'MAGMA/USDT'
+    'RLC/USDT', 'DMC/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'KAIO/USDT'
 ]
+
+CSV_FILENAME = 'trades_log.csv'
+
+# Initialisation du fichier CSV avec en-têtes s'il n'existe pas encore
+if not os.path.exists(CSV_FILENAME):
+    df_init = pd.DataFrame(columns=[
+        'timestamp', 'bot_name', 'symbol', 'entry_price', 
+        'exit_price', 'pnl_usd', 'pnl_pct', 'result', 'capital_after'
+    ])
+    df_init.to_csv(CSV_FILENAME, index=False)
 
 exchange = ccxt.bitget({'enableRateLimit': True})
 
@@ -108,7 +119,21 @@ def manage_positions(bot):
                 res = 'WIN' if pnl_usd >= 0 else 'LOSS'
                 bot['history'].append({'symbol': symbol, 'result': res, 'pnl': pnl_usd})
                 
-                print(f"\n🚨 [{bot['name']}] SORTIE {res} | {symbol} | Prix: {current_price:.10f} | PnL: ${pnl_usd:+.2f}")
+                # --- ENREGISTREMENT DU TRADE DANS LE FICHIER CSV ---
+                trade_data = {
+                    'timestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'bot_name': bot['name'],
+                    'symbol': symbol,
+                    'entry_price': pos['entry'],
+                    'exit_price': pos['sl'],
+                    'pnl_usd': round(pnl_usd, 4),
+                    'pnl_pct': round(pnl_pct * 100, 2),
+                    'result': res,
+                    'capital_after': round(bot['capital'], 2)
+                }
+                pd.DataFrame([trade_data]).to_csv(CSV_FILENAME, mode='a', header=False, index=False)
+                
+                print(f"\n🚨 [{bot['name']}] SORTIE {res} | {symbol} | Prix: {current_price:.10f} | PnL: ${pnl_usd:+.2f} (Enregistré dans {CSV_FILENAME})")
                 positions_to_remove.append(pos)
                 
         except Exception as e:
@@ -161,7 +186,8 @@ def scan_and_enter(bot):
 # ==========================================
 # 5. BOUCLE D'EXÉCUTION ET BENCHMARK
 # ==========================================
-print("\n🤖 BOT COMPARATIF ACTIF (DONCHIAN 30M vs DONCHIAN 60M)")
+print(f"\n🤖 BOT COMPARATIF ACTIF (DONCHIAN 30M vs DONCHIAN 60M)")
+print(f"📁 Fichier d'enregistrement des trades : {CSV_FILENAME}")
 try:
     while True:
         timestamp_str = datetime.now().strftime('%H:%M:%S')
