@@ -17,7 +17,7 @@ INITIAL_CAPITAL = 1000.0
 TRADE_SIZE = 150.0
 
 TOKENS = [
-    'US/USDT', 'STRK/USDT', 'RLC/USDT', 'BTW/USDT', 'KAIO/USDT', 'JCT/USDT', 'ORCA/USDT', 'DMC/USDT', 'OGN/USDT'
+    'RLC/USDT', 'DMC/USDT', 'MOVR/USDT', 'QUBIC/USDT', 'AIN/USDT', 'KAIO/USDT'
 ]
 
 exchange = ccxt.bitget({'enableRateLimit': True})
@@ -101,7 +101,9 @@ def manage_positions(bot):
                 pos['sl'] = new_sl
             
             if current_price <= pos['sl']:
-                pnl_pct = (pos['sl'] - pos['entry']) / pos['entry']
+                # --- MODIFICATION : Calcul sur le prix réel exécuté au scan (current_price) ---
+                exit_price = current_price
+                pnl_pct = (exit_price - pos['entry']) / pos['entry']
                 pnl_usd = pos['size'] * pnl_pct
                 bot['capital'] += pnl_usd
                 
