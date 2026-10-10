@@ -2,21 +2,22 @@ import requests
 
 def get_bitget_pure_spot_strong_buy():
     """
-    Récupère les tokens Strong Buy 1D et filtre proprement en local
-    pour ne garder que le Spot USDT pur.
+    Récupère les tokens Spot Bitget en Strong Buy (1D) 
+    avec une volatilité hebdomadaire (Volatility.W) supérieure à 20.
     """
-    print("⚡ Interrogation instantanée du Screener TradingView (1D)...")
+    print("⚡ Interrogation du Screener TradingView (Strong Buy 1D + Volatilité W > 20)...")
     
     url = "https://scanner.tradingview.com/crypto/scan"
     
     payload = {
         "filter": [
             {"left": "Recommend.All", "operation": "egreater", "right": 0.5},  # STRONG BUY
-            {"left": "exchange", "operation": "equal", "right": "BITGET"}
+            {"left": "exchange", "operation": "equal", "right": "BITGET"},
+            {"left": "Volatility.W", "operation": "egreater", "right": 20}    # --- FILTRE VOLATILITÉ HEBDOMADAIRE > 20 ---
         ],
         "options": {"lang": "en"},
         "symbols": {"query": {"types": []}, "tickers": []},
-        "columns": ["name", "close", "change", "Recommend.All"],
+        "columns": ["name", "close", "change", "Recommend.All", "Volatility.W"],
         "sort": {"sortBy": "Recommend.All", "sortOrder": "desc"},
         "range": [0, 150]
     }
@@ -29,12 +30,11 @@ def get_bitget_pure_spot_strong_buy():
         spot_tokens = []
         
         for item in results:
-            symbol_raw = item.get("s", "")  # Ex: "BITGET:STRKUSDT" ou dérivés
+            symbol_raw = item.get("s", "")  # Ex: "BITGET:STRKUSDT"
             if ":" in symbol_raw:
                 ticker = symbol_raw.split(":")[1]
                 
-                # On ne garde que les paires en /USDT qui sont du Spot pur
-                # (on élimine les contrats perpétuels / futures qui contiennent des indices de date ou des suffixes spécifiques)
+                # Conserver uniquement le Spot USDT pur
                 if ticker.endswith("USDT") and not any(sub in ticker for sub in ["PERP", "QUARTER", "_", "-"]):
                     formatted_symbol = ticker[:-4] + "/USDT"
                     if formatted_symbol not in spot_tokens:
@@ -50,7 +50,7 @@ if __name__ == "__main__":
     tokens = get_bitget_pure_spot_strong_buy()
     
     print("\n" + "="*60)
-    print(f"🚀 TOKENS BITGET SPOT EN STRONG BUY 1D ({len(tokens)}) :")
+    print(f"🚀 TOKENS FILTRÉS ({len(tokens)}) :")
     print("="*60)
     print(tokens)
     print("="*60)
