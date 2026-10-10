@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import time
 from datetime import datetime
+from tradingview_ta import TA_Handler, Interval
 
 # ==========================================
 # 1. CONFIGURATION STRATÉGIQUE (1M)
@@ -16,9 +17,16 @@ CANDLES_TO_FETCH = 250  # Historique suffisant pour l'EMA 200
 INITIAL_CAPITAL = 1000.0
 TRADE_SIZE = 150.0
 
+# Base de tokens de secours + mise à jour dynamique via TradingView Screener
 TOKENS = [
     'RLC/USDT', 'US/USDT', 'STRK/USDT', 'BTW/USDT', 'KAIO/USDT'
 ]
+
+# Fréquence de rafraîchissement du Screener TradingView (ex: toutes les 5 minutes)
+SCREENER_INTERVAL_SEC = 300  
+last_screener_time = 0
+
+DYNAMIC_TOKENS = list(TOKENS)
 
 exchange = ccxt.bitget({'enableRateLimit': True})
 
@@ -44,7 +52,50 @@ bot_60m = {
 BOTS = [bot_30m, bot_60m]
 
 # ==========================================
-# 3. CALCUL DES INDICATEURS QUANTITATIFS
+# 3. INTERROGATION DIRECTE TRADINGVIEW (SCREENER 1D)
+# ==========================================
+def is_tv_strong_buy(symbol):
+    """Interroge l'API TradingView pour vérifier le statut STRONG_BUY en unité de temps Journalière (1D)."""
+    try:
+        ticker_tv = symbol.replace('/', '')
+        handler = TA_Handler(
+            symbol=ticker_tv,
+            screener="crypto",
+            exchange="BITGET",
+            interval=Interval.INTERVAL_1_DAY  # --- MODIFICATION : RATING TECHNICAL EN JOURNALIER (1D) ---
+        )
+        analysis = handler.get_analysis()
+        return analysis.summary.get('RECOMMENDATION') == 'STRONG_BUY'
+    except Exception:
+        return False
+
+def update_screener_tokens():
+    """Consulte TradingView (1D) et met à jour DYNAMIC_TOKENS avec les paires en STRONG_BUY."""
+    global DYNAMIC_TOKENS
+    print("\n🔍 [SCREENER TV 1D] Interrogation de TradingView (Daily) pour les tokens en STRONG_BUY...")
+    
+    strong_buy_list = []
+    # Teste les paires de ta liste de référence
+    for symbol in TOKENS:
+        if is_tv_strong_buy(symbol):
+            strong_buy_list.append(symbol)
+            
+    # Garder les tokens qui ont une position ouverte pour assurer le suivi
+    active_in_positions = []
+    for bot in BOTS:
+        active_in_positions.extend([p['symbol'] for p in bot['positions']])
+        
+    updated_list = list(set(strong_buy_list + active_in_positions))
+    
+    # Si aucun token n'est détecté en STRONG_BUY, on garde la liste d'origine par sécurité
+    if not updated_list:
+        updated_list = list(TOKENS)
+        
+    DYNAMIC_TOKENS = updated_list
+    print(f"✅ [SCREENER TV 1D] Tokens retenus ({len(DYNAMIC_TOKENS)}) : {DYNAMIC_TOKENS}")
+
+# ==========================================
+# 4. CALCUL DES INDICATEURS QUANTITATIFS
 # ==========================================
 def compute_indicators(df, window):
     """Calcule l'EMA 200, l'ATR et le Donchian/Volume selon la fenêtre spécifiée."""
@@ -77,7 +128,7 @@ def fetch_ohlcv(symbol, timeframe, limit):
         return None
 
 # ==========================================
-# 4. MOTEUR DE SUIVI ET D'ENTRÉE PAR BOT
+# 5. MOTEUR DE SUIVI ET D'ENTRÉE PAR BOT
 # ==========================================
 def manage_positions(bot):
     """Gère le Trailing Stop ATR et la clôture des positions."""
@@ -124,7 +175,7 @@ def scan_and_enter(bot):
     active_symbols = [p['symbol'] for p in bot['positions']]
     
     print(f"\n--- Scan [{bot['name']}] ---")
-    for symbol in TOKENS:
+    for symbol in DYNAMIC_TOKENS:
         if symbol in active_symbols:
             continue
             
@@ -161,11 +212,18 @@ def scan_and_enter(bot):
             print(f"🚀 [{bot['name']}] ACHAT {symbol} | Entrée: {close:.10f} | SL Initial: {initial_sl:.10f}")
 
 # ==========================================
-# 5. BOUCLE D'EXÉCUTION ET BENCHMARK
+# 6. BOUCLE D'EXÉCUTION ET BENCHMARK
 # ==========================================
 print("\n🤖 BOT COMPARATIF ACTIF (DONCHIAN 30M vs DONCHIAN 60M)")
 try:
     while True:
+        now_ts = time.time()
+        
+        # Mise à jour du screener TradingView toutes les 5 minutes
+        if last_screener_time == 0 or (now_ts - last_screener_time >= SCREENER_INTERVAL_SEC):
+            update_screener_tokens()
+            last_screener_time = now_ts
+
         timestamp_str = datetime.now().strftime('%H:%M:%S')
         print(f"\n🔍 ==================== SCAN 1M ({timestamp_str}) ====================")
         
