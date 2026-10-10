@@ -1,18 +1,28 @@
+import subprocess
+import sys
+
+# Vérification et installation automatique de tradingview_ta si nécessaire
+try:
+    from tradingview_ta import TA_Handler, Interval
+except ModuleNotFoundError:
+    print("📦 Installation automatique du module 'tradingview_ta'...")
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "tradingview_ta"])
+    from tradingview_ta import TA_Handler, Interval
+
 import ccxt
 import numpy as np
 import pandas as pd
 import time
 from datetime import datetime
-from tradingview_ta import TA_Handler, Interval
 
 # ==========================================
 # 1. CONFIGURATION STRATÉGIQUE (1M)
 # ==========================================
 TIMEFRAME = '1m'
-EMA_FILTER_PERIOD = 100 # Filtre de tendance sur 200 bougies
+EMA_FILTER_PERIOD = 100  # Filtre de tendance sur 100 bougies
 ATR_PERIOD = 14          # Période ATR
-ATR_MULTIPLIER = 1.8    # Trailing Stop multiplier
-CANDLES_TO_FETCH = 250  # Historique suffisant pour l'EMA 200
+ATR_MULTIPLIER = 1.8     # Trailing Stop multiplier
+CANDLES_TO_FETCH = 250   # Historique suffisant pour l'EMA
 
 INITIAL_CAPITAL = 1000.0
 TRADE_SIZE = 150.0
@@ -22,7 +32,7 @@ TOKENS = [
     'RLC/USDT', 'US/USDT', 'STRK/USDT', 'BTW/USDT', 'KAIO/USDT'
 ]
 
-# Fréquence de rafraîchissement du Screener TradingView (ex: toutes les 5 minutes)
+# Fréquence de rafraîchissement du Screener TradingView (toutes les 5 minutes)
 SCREENER_INTERVAL_SEC = 300  
 last_screener_time = 0
 
@@ -62,7 +72,7 @@ def is_tv_strong_buy(symbol):
             symbol=ticker_tv,
             screener="crypto",
             exchange="BITGET",
-            interval=Interval.INTERVAL_1_DAY  # --- MODIFICATION : RATING TECHNICAL EN JOURNALIER (1D) ---
+            interval=Interval.INTERVAL_1_DAY
         )
         analysis = handler.get_analysis()
         return analysis.summary.get('RECOMMENDATION') == 'STRONG_BUY'
@@ -75,19 +85,18 @@ def update_screener_tokens():
     print("\n🔍 [SCREENER TV 1D] Interrogation de TradingView (Daily) pour les tokens en STRONG_BUY...")
     
     strong_buy_list = []
-    # Teste les paires de ta liste de référence
     for symbol in TOKENS:
         if is_tv_strong_buy(symbol):
             strong_buy_list.append(symbol)
             
-    # Garder les tokens qui ont une position ouverte pour assurer le suivi
+    # Garder les tokens ayant une position ouverte pour assurer le suivi
     active_in_positions = []
     for bot in BOTS:
         active_in_positions.extend([p['symbol'] for p in bot['positions']])
         
     updated_list = list(set(strong_buy_list + active_in_positions))
     
-    # Si aucun token n'est détecté en STRONG_BUY, on garde la liste d'origine par sécurité
+    # Fallback : si aucun token n'est détecté en STRONG_BUY, conserver la liste d'origine
     if not updated_list:
         updated_list = list(TOKENS)
         
@@ -98,7 +107,7 @@ def update_screener_tokens():
 # 4. CALCUL DES INDICATEURS QUANTITATIFS
 # ==========================================
 def compute_indicators(df, window):
-    """Calcule l'EMA 200, l'ATR et le Donchian/Volume selon la fenêtre spécifiée."""
+    """Calcule l'EMA 100, l'ATR et le Donchian/Volume selon la fenêtre spécifiée."""
     df = df.copy()
     close = df['close']
     high = df['high']
@@ -152,7 +161,6 @@ def manage_positions(bot):
                 pos['sl'] = new_sl
             
             if current_price <= pos['sl']:
-                # --- MODIFICATION : Calcul sur le prix réel exécuté au scan (current_price) ---
                 exit_price = current_price
                 pnl_pct = (exit_price - pos['entry']) / pos['entry']
                 pnl_usd = pos['size'] * pnl_pct
@@ -171,7 +179,7 @@ def manage_positions(bot):
         bot['positions'].remove(pos)
 
 def scan_and_enter(bot):
-    """Détecte les opportunités selon la fenêtre Donchian propre au bot avec affichage détaillé."""
+    """Détecte les opportunités selon la fenêtre Donchian propre au bot."""
     active_symbols = [p['symbol'] for p in bot['positions']]
     
     print(f"\n--- Scan [{bot['name']}] ---")
@@ -193,8 +201,7 @@ def scan_and_enter(bot):
         volume = last_row['volume']
         vol_ma = last_row['vol_ma']
         
-        # --- DÉCIMALES AJUSTÉES À 10 ---
-        print(f"    👉 {symbol:<10} | Prix: {close:<14.10f} | EMA200: {ema_200:<14.10f} | Donchian {bot['window']}m: {donchian_high:<14.10f}")
+        print(f"    👉 {symbol:<10} | Prix: {close:<14.10f} | EMA100: {ema_200:<14.10f} | Donchian {bot['window']}m: {donchian_high:<14.10f}")
         
         is_uptrend = close > ema_200
         is_breakout = close > donchian_high
