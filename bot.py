@@ -184,7 +184,7 @@ try:
             print(f"{bot['name']:<15} | ${bot['capital']:<9.2f} | {len(bot['positions']):<15} | {total:<8} | {wr:.1f}%")
         print("=" * 68)
         
-        time.sleep(60)
+        time.sleep(3)
         
 except KeyboardInterrupt:
     print("\n🛑 Bot comparatif arrêté proprement.")
