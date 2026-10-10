@@ -10,7 +10,7 @@ from datetime import datetime
 TIMEFRAME = '1m'
 EMA_FILTER_PERIOD = 100 # Filtre de tendance sur 200 bougies
 ATR_PERIOD = 14          # Période ATR
-ATR_MULTIPLIER = 2.5    # Trailing Stop multiplier
+ATR_MULTIPLIER = 1.8    # Trailing Stop multiplier
 CANDLES_TO_FETCH = 250  # Historique suffisant pour l'EMA 200
 
 INITIAL_CAPITAL = 1000.0
@@ -184,7 +184,7 @@ try:
             print(f"{bot['name']:<15} | ${bot['capital']:<9.2f} | {len(bot['positions']):<15} | {total:<8} | {wr:.1f}%")
         print("=" * 68)
         
-        time.sleep(2)
+        time.sleep(60)
         
 except KeyboardInterrupt:
     print("\n🛑 Bot comparatif arrêté proprement.")
