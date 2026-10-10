@@ -1,19 +1,66 @@
+import ccxt
+import numpy as np
+import pandas as pd
+import time
 import requests
+from datetime import datetime
 
-def get_bitget_pure_spot_strong_buy():
-    """
-    Récupère les tokens Spot Bitget en Strong Buy (1D) 
-    avec une volatilité hebdomadaire (Volatility.W) supérieure à 20.
-    """
-    print("⚡ Interrogation du Screener TradingView (Strong Buy 1D + Volatilité W > 20)...")
+# ==========================================
+# 1. CONFIGURATION STRATÉGIQUE (1M)
+# ==========================================
+TIMEFRAME = '1m'
+EMA_FILTER_PERIOD = 100  # Filtre de tendance sur 200 bougies
+ATR_PERIOD = 14          # Période ATR
+ATR_MULTIPLIER = 1.8     # Trailing Stop multiplier
+CANDLES_TO_FETCH = 250   # Historique suffisant pour l'EMA 200
+
+INITIAL_CAPITAL = 1000.0
+TRADE_SIZE = 150.0
+
+# Fréquence de mise à jour du Screener TradingView (toutes les 5 minutes = 300 secondes)
+SCREENER_INTERVAL_SEC = 300
+last_screener_time = 0
+
+# Liste dynamique initialisée à vide, mise à jour au démarrage
+TOKENS = []
+
+exchange = ccxt.bitget({'enableRateLimit': True})
+
+# ==========================================
+# 2. STRUCTURES DE PAPER TRADING SÉPARÉES
+# ==========================================
+bot_30m = {
+    'name': 'DONCHIAN 30M',
+    'window': 30,
+    'capital': INITIAL_CAPITAL,
+    'positions': [],
+    'history': []
+}
+
+bot_60m = {
+    'name': 'DONCHIAN 60M',
+    'window': 60,
+    'capital': INITIAL_CAPITAL,
+    'positions': [],
+    'history': []
+}
+
+BOTS = [bot_30m, bot_60m]
+
+# ==========================================
+# 3. SCREENER TRADINGVIEW DYNAMIQUE (STRONG BUY + VOLATILITY W > 20)
+# ==========================================
+def update_dynamic_tokens():
+    """Interroge l'API TradingView pour récupérer les tokens Spot Bitget (Strong Buy 1D + Volatilité W > 20)."""
+    global TOKENS
+    print("\n🔍 [SCREENER TV] Interrogation de TradingView (Strong Buy 1D + Volatilité W > 20)...")
     
     url = "https://scanner.tradingview.com/crypto/scan"
-    
     payload = {
         "filter": [
             {"left": "Recommend.All", "operation": "egreater", "right": 0.5},  # STRONG BUY
             {"left": "exchange", "operation": "equal", "right": "BITGET"},
-            {"left": "Volatility.W", "operation": "egreater", "right": 20}    # --- FILTRE VOLATILITÉ HEBDOMADAIRE > 20 ---
+            {"left": "Volatility.W", "operation": "egreater", "right": 20}    # Volatilité hebdomadaire > 20
         ],
         "options": {"lang": "en"},
         "symbols": {"query": {"types": []}, "tickers": []},
@@ -22,35 +69,179 @@ def get_bitget_pure_spot_strong_buy():
         "range": [0, 150]
     }
     
+    fetched_tokens = []
     try:
         response = requests.post(url, json=payload, timeout=10)
         data = response.json()
-        
         results = data.get("data", [])
-        spot_tokens = []
         
         for item in results:
             symbol_raw = item.get("s", "")  # Ex: "BITGET:STRKUSDT"
             if ":" in symbol_raw:
                 ticker = symbol_raw.split(":")[1]
-                
-                # Conserver uniquement le Spot USDT pur
                 if ticker.endswith("USDT") and not any(sub in ticker for sub in ["PERP", "QUARTER", "_", "-"]):
                     formatted_symbol = ticker[:-4] + "/USDT"
-                    if formatted_symbol not in spot_tokens:
-                        spot_tokens.append(formatted_symbol)
-                    
-        return spot_tokens
-
+                    if formatted_symbol not in fetched_tokens:
+                        fetched_tokens.append(formatted_symbol)
+                        
     except Exception as e:
-        print(f"⚠️ Erreur lors de la requête API TradingView : {e}")
-        return []
+        print(f"⚠️ Erreur lors de la requête du screener TradingView : {e}")
+        
+    # Sécurité : si le screener retourne une liste vide temporaire, on garde l'ancienne liste pour ne pas bloquer les bots
+    if fetched_tokens:
+        TOKENS = fetched_tokens
+    elif not TOKENS:
+        TOKENS = ['STRK/USDT', 'KAIO/USDT', 'BTW/USDT']  # Fallback de secours par défaut
+        
+    print(f"✅ [SCREENER TV] Tokens actifs mis à jour ({len(TOKENS)}) : {TOKENS}")
 
-if __name__ == "__main__":
-    tokens = get_bitget_pure_spot_strong_buy()
+# ==========================================
+# 4. CALCUL DES INDICATEURS QUANTITATIFS
+# ==========================================
+def compute_indicators(df, window):
+    """Calcule l'EMA 200, l'ATR et le Donchian/Volume selon la fenêtre spécifiée."""
+    df = df.copy()
+    close = df['close']
+    high = df['high']
+    low = df['low']
     
-    print("\n" + "="*60)
-    print(f"🚀 TOKENS FILTRÉS ({len(tokens)}) :")
-    print("="*60)
-    print(tokens)
-    print("="*60)
+    df['ema_200'] = close.ewm(span=EMA_FILTER_PERIOD, adjust=False).mean()
+    df['donchian_high'] = high.shift(1).rolling(window=window).max()
+    df['donchian_low'] = low.shift(1).rolling(window=window).min()
+    
+    tr = np.maximum(
+        high - low,
+        np.maximum(abs(high - close.shift(1)), abs(low - close.shift(1)))
+    )
+    df['atr'] = tr.rolling(window=ATR_PERIOD).mean()
+    df['vol_ma'] = df['volume'].rolling(window=window).mean()
+    
+    return df
+
+def fetch_ohlcv(symbol, timeframe, limit):
+    """Récupère les données OHLCV depuis l'exchange."""
+    try:
+        ohlcv = exchange.fetch_ohlcv(symbol, timeframe=timeframe, limit=limit)
+        df = pd.DataFrame(ohlcv, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        return df
+    except Exception as e:
+        print(f"⚠️ Erreur de téléchargement pour {symbol} : {e}")
+        return None
+
+# ==========================================
+# 5. MOTEUR DE SUIVI ET D'ENTRÉE PAR BOT
+# ==========================================
+def manage_positions(bot):
+    """Gère le Trailing Stop ATR et la clôture des positions."""
+    positions_to_remove = []
+    
+    for pos in bot['positions']:
+        symbol = pos['symbol']
+        try:
+            ticker = exchange.fetch_ticker(symbol)
+            current_price = ticker['last']
+            
+            df = fetch_ohlcv(symbol, TIMEFRAME, limit=CANDLES_TO_FETCH)
+            if df is None or len(df) < ATR_PERIOD:
+                continue
+            
+            df = compute_indicators(df, bot['window'])
+            current_atr = df['atr'].iloc[-1]
+            
+            new_sl = current_price - (current_atr * ATR_MULTIPLIER)
+            if new_sl > pos['sl']:
+                pos['sl'] = new_sl
+            
+            if current_price <= pos['sl']:
+                exit_price = current_price
+                pnl_pct = (exit_price - pos['entry']) / pos['entry']
+                pnl_usd = pos['size'] * pnl_pct
+                bot['capital'] += pnl_usd
+                
+                res = 'WIN' if pnl_usd >= 0 else 'LOSS'
+                bot['history'].append({'symbol': symbol, 'result': res, 'pnl': pnl_usd})
+                
+                print(f"\n🚨 [{bot['name']}] SORTIE {res} | {symbol} | Prix: {current_price:.10f} | PnL: ${pnl_usd:+.2f}")
+                positions_to_remove.append(pos)
+                
+        except Exception as e:
+            print(f"⚠️ Erreur suivi [{bot['name']}] {symbol}: {e}")
+            
+    for pos in positions_to_remove:
+        bot['positions'].remove(pos)
+
+def scan_and_enter(bot):
+    """Détecte les opportunités selon la fenêtre Donchian propre au bot sur les tokens dynamiques."""
+    active_symbols = [p['symbol'] for p in bot['positions']]
+    
+    print(f"\n--- Scan [{bot['name']}] ---")
+    for symbol in TOKENS:
+        if symbol in active_symbols:
+            continue
+            
+        df = fetch_ohlcv(symbol, TIMEFRAME, CANDLES_TO_FETCH)
+        if df is None or len(df) < EMA_FILTER_PERIOD:
+            continue
+            
+        df = compute_indicators(df, bot['window'])
+        last_row = df.iloc[-1]
+        
+        close = last_row['close']
+        ema_200 = last_row['ema_200']
+        donchian_high = last_row['donchian_high']
+        atr = last_row['atr']
+        volume = last_row['volume']
+        vol_ma = last_row['vol_ma']
+        
+        print(f"    👉 {symbol:<10} | Prix: {close:<14.10f} | EMA200: {ema_200:<14.10f} | Donchian {bot['window']}m: {donchian_high:<14.10f}")
+        
+        is_uptrend = close > ema_200
+        is_breakout = close > donchian_high
+        is_volume_confirmed = volume > vol_ma
+        
+        if is_uptrend and is_breakout and is_volume_confirmed:
+            initial_sl = close - (atr * ATR_MULTIPLIER)
+            bot['positions'].append({
+                'symbol': symbol,
+                'entry': close,
+                'sl': initial_sl,
+                'size': TRADE_SIZE,
+                'entry_time': datetime.now()
+            })
+            print(f"🚀 [{bot['name']}] ACHAT {symbol} | Entrée: {close:.10f} | SL Initial: {initial_sl:.10f}")
+
+# ==========================================
+# 6. BOUCLE D'EXÉCUTION ET BENCHMARK
+# ==========================================
+print("\n🤖 BOT COMPARATIF DYNAMIQUE ACTIF (DONCHIAN 30M vs DONCHIAN 60M)")
+try:
+    while True:
+        now_ts = time.time()
+        
+        # Actualisation automatique du screener TradingView toutes les 5 minutes (et au démarrage)
+        if last_screener_time == 0 or (now_ts - last_screener_time >= SCREENER_INTERVAL_SEC):
+            update_dynamic_tokens()
+            last_screener_time = now_ts
+
+        timestamp_str = datetime.now().strftime('%H:%M:%S')
+        print(f"\n🔍 ==================== SCAN 1M ({timestamp_str}) ====================")
+        
+        for bot in BOTS:
+            manage_positions(bot)
+            scan_and_enter(bot)
+        
+        print(f"\n📊 {'='*20} COMPARATIF EN DIRECT {'='*20}")
+        print(f"{'BOT':<15} | {'CAPITAL':<10} | {'POS. OUVERTES':<15} | {'TRADES':<8} | {'WIN RATE':<10}")
+        print("-" * 68)
+        
+        for bot in BOTS:
+            wins = sum(1 for t in bot['history'] if t['result'] == 'WIN')
+            total = len(bot['history'])
+            wr = (wins / total * 100) if total > 0 else 0.0
+            print(f"{bot['name']:<15} | ${bot['capital']:<9.2f} | {len(bot['positions']):<15} | {total:<8} | {wr:.1f}%")
+        print("=" * 68)
+        
+        time.sleep(3)
+        
+except KeyboardInterrupt:
+    print("\n🛑 Bot comparatif arrêté proprement.")
