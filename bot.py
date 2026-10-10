@@ -10,7 +10,7 @@ from datetime import datetime
 TIMEFRAME = '1m'
 EMA_FILTER_PERIOD = 100 # Filtre de tendance sur 200 bougies
 ATR_PERIOD = 14          # Période ATR
-ATR_MULTIPLIER = 1.8    # Trailing Stop multiplier
+ATR_MULTIPLIER = 2.5    # Trailing Stop multiplier
 CANDLES_TO_FETCH = 250  # Historique suffisant pour l'EMA 200
 
 INITIAL_CAPITAL = 1000.0
