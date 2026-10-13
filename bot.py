@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import time
 import requests
+import os
 from datetime import datetime
 
 # ==========================================
@@ -177,7 +178,7 @@ def manage_positions(bot, use_trailing):
                     exit_reason = "Signal Inverse"
                     exit_price = current_price
             else:
-                # CAS 2 : SANS TRAILING (Uniquement sortie sur Signal Inverse par exemple)
+                # CAS 2 : SANS TRAILING (Uniquement sortie sur Signal Inverse)
                 if crossunder:
                     exit_triggered = True
                     exit_reason = "Signal Inverse"
@@ -189,7 +190,28 @@ def manage_positions(bot, use_trailing):
                 bot['capital'] += pnl_usd
 
                 res = 'WIN' if pnl_usd >= 0 else 'LOSS'
-                bot['history'].append({'symbol': symbol, 'result': res, 'pnl': pnl_usd})
+                
+                exit_time_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                entry_time_str = pos['entry_time'].strftime('%Y-%m-%d %H:%M:%S')
+
+                trade_record = {
+                    'symbol': symbol,
+                    'entry_time': entry_time_str,
+                    'exit_time': exit_time_str,
+                    'entry_price': pos['entry'],
+                    'exit_price': exit_price,
+                    'result': res,
+                    'pnl_usd': round(pnl_usd, 2),
+                    'exit_reason': exit_reason
+                }
+                
+                bot['history'].append(trade_record)
+
+                # --- SAUVEGARDE DANS LE FICHIER CSV CORRESPONDANT ---
+                filename = "trades_avec_trailing.csv" if use_trailing else "trades_sans_trailing.csv"
+                df_trade = pd.DataFrame([trade_record])
+                file_exists = os.path.exists(filename)
+                df_trade.to_csv(filename, mode='a', header=not file_exists, index=False)
 
                 print(f"\n🚨 [{bot['name']}] SORTIE {res} ({exit_reason}) | {symbol} | Prix: {exit_price:.10f} | PnL: ${pnl_usd:+.2f}")
                 positions_to_remove.append(pos)
