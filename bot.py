@@ -6,7 +6,7 @@ from datetime import datetime
 # ==========================================
 # 1. CONFIGURATION DU BACKTEST
 # ==========================================
-SYMBOL = 'US/USDT'          # Paire à backtester
+SYMBOL = 'RVV/USDT'          # Paire à backtester
 TIMEFRAME = '1m'             # Unité de temps
 FAST_LEN = 500               # MA Rapide
 SLOW_LEN = 3                 # MA Lente
