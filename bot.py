@@ -12,10 +12,10 @@ from datetime import datetime
 TIMEFRAME = '1m'
 FAST_LEN = 500             # MA Rapide (500)
 SLOW_LEN = 3               # MA Lente (3)
-MA_TYPE = 'EMA'            # Type de moyenne mobile : 'EMA' ou 'SMA'
+MA_TYPE = 'SMA'            # Type de moyenne mobile : 'EMA' ou 'SMA'
 ATR_PERIOD = 14            # Période ATR
-ATR_MULTIPLIER = 2.5       # Trailing Stop ATR multiplier
-SL_PERCENT = 3.0           # Stop Loss fixe en % pour le bot sans trailing
+ATR_MULTIPLIER = 1.8       # Trailing Stop ATR multiplier
+SL_PERCENT = 5.0           # Stop Loss fixe en % pour le bot sans trailing
 CANDLES_TO_FETCH = 250     # Historique suffisant pour les MAs
 
 INITIAL_CAPITAL = 1000.0
