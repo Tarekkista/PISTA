@@ -12,7 +12,7 @@ from datetime import datetime
 TIMEFRAME = '1m'
 FAST_LEN = 500             # MA Rapide (500)
 SLOW_LEN = 3               # MA Lente (3)
-MA_TYPE = 'SMA'            # Type de moyenne mobile : 'EMA' ou 'SMA'
+MA_TYPE = 'EMA'            # Type de moyenne mobile : 'EMA' ou 'SMA'
 ATR_PERIOD = 14            # Période ATR
 ATR_MULTIPLIER = 1.8       # Trailing Stop ATR multiplier
 SL_PERCENT = 5.0           # Stop Loss fixe en % pour le bot sans trailing
@@ -20,6 +20,12 @@ CANDLES_TO_FETCH = 250     # Historique suffisant pour les MAs
 
 INITIAL_CAPITAL = 1000.0
 TRADE_SIZE = 100.0
+
+# --- SIMULATION RÉALISTE VIA CARNET D'ORDRES (API publique Bitget, sans clé) ---
+FEE_RATE = 0.001           # Frais par côté (0,1 %) : À VÉRIFIER sur ton compte Bitget
+ORDERBOOK_DEPTH = 50       # Nombre de niveaux lus dans le carnet
+MAX_SLIPPAGE_PCT = 0.5     # Entrée rejetée si le prix moyen obtenu dépasse le prix du signal de plus de X %
+MAX_SPREAD_PCT = 1.0       # Entrée rejetée si le spread (ask - bid) dépasse X %
 
 # Fréquence de mise à jour du Screener TradingView (toutes les 5 minutes = 300 secondes)
 SCREENER_INTERVAL_SEC = 300
@@ -135,6 +141,146 @@ def fetch_ohlcv(symbol, timeframe, limit):
         return None
 
 # ==========================================
+# 4b. SIMULATION RÉALISTE DES FILLS (CARNET D'ORDRES)
+# ==========================================
+def fetch_orderbook(symbol):
+    """Lit le carnet d'ordres public (sans clé API). Retourne None en cas d'erreur."""
+    try:
+        return exchange.fetch_order_book(symbol, limit=ORDERBOOK_DEPTH)
+    except Exception as e:
+        print(f"⚠️ Erreur carnet d'ordres pour {symbol} : {e}")
+        return None
+
+def simulate_buy(book, usd_amount):
+    """Achat au marché de usd_amount en parcourant les asks.
+    Retourne (prix_moyen, quantité, usd_dépensé, rempli_complètement)."""
+    remaining = usd_amount
+    qty = 0.0
+    spent = 0.0
+    for level in book['asks']:
+        price, amount = level[0], level[1]
+        take_usd = min(remaining, price * amount)
+        qty += take_usd / price
+        spent += take_usd
+        remaining -= take_usd
+        if remaining <= 1e-9:
+            break
+    complete = remaining <= 1e-9
+    avg = (spent / qty) if qty > 0 else None
+    return avg, qty, spent, complete
+
+def simulate_sell(book, qty):
+    """Vente au marché de qty en parcourant les bids.
+    Retourne (prix_moyen, produit_usd, rempli_complètement).
+    Si le carnet est trop mince, le reste est valorisé au dernier niveau lu."""
+    remaining = qty
+    proceeds = 0.0
+    last_price = None
+    for level in book['bids']:
+        price, amount = level[0], level[1]
+        take = min(remaining, amount)
+        proceeds += take * price
+        remaining -= take
+        last_price = price
+        if remaining <= 1e-12:
+            break
+    complete = remaining <= 1e-12
+    if not complete and last_price is not None:
+        proceeds += remaining * last_price
+    avg = (proceeds / qty) if qty > 0 else None
+    return avg, proceeds, complete
+
+def realistic_entry(symbol, signal_price):
+    """Simule l'achat réaliste au moment du signal.
+    Retourne un dict de champs à ajouter à la position."""
+    book = fetch_orderbook(symbol)
+    if not book or not book.get('asks') or not book.get('bids'):
+        print(f"   ↳ [CARNET] {symbol} | ❌ REJETÉ (carnet indisponible)")
+        return {'rejected': True, 'note': 'carnet indisponible'}
+
+    best_bid = book['bids'][0][0]
+    best_ask = book['asks'][0][0]
+    mid = (best_bid + best_ask) / 2.0
+    spread_pct = (best_ask - best_bid) / mid * 100.0
+
+    avg, qty, spent, complete = simulate_buy(book, TRADE_SIZE)
+    if avg is None:
+        print(f"   ↳ [CARNET] {symbol} | ❌ REJETÉ (aucun fill possible)")
+        return {'rejected': True, 'note': 'aucun fill possible', 'entry_spread_pct': round(spread_pct, 3)}
+
+    # Positif = pire que le prix du signal
+    slippage_pct = (avg - signal_price) / signal_price * 100.0
+
+    fields = {
+        'rejected': False,
+        'note': '',
+        'entry_real': avg,
+        'qty': qty,
+        'entry_fee': spent * FEE_RATE,
+        'entry_cost': spent + spent * FEE_RATE,
+        'entry_spread_pct': round(spread_pct, 3),
+        'entry_slippage_pct': round(slippage_pct, 3)
+    }
+
+    reasons = []
+    if not complete:
+        reasons.append('carnet trop mince')
+    if spread_pct > MAX_SPREAD_PCT:
+        reasons.append(f'spread {spread_pct:.2f}%')
+    if slippage_pct > MAX_SLIPPAGE_PCT:
+        reasons.append(f'slippage {slippage_pct:.2f}%')
+
+    if reasons:
+        fields['rejected'] = True
+        fields['note'] = ' / '.join(reasons)
+        print(f"   ↳ [CARNET] {symbol} | ❌ REJETÉ ({fields['note']})")
+    else:
+        print(f"   ↳ [CARNET] {symbol} | spread: {spread_pct:.3f}% | slippage: {slippage_pct:+.3f}% | prix réel: {avg:.10f}")
+
+    return fields
+
+def realistic_exit(pos, theoretical_exit_price):
+    """Simule la vente réaliste au moment de la sortie.
+    Retourne un dict de colonnes à ajouter à l'enregistrement du trade."""
+    result = {
+        'pnl_usd_real': None,
+        'entry_price_real': pos.get('entry_real'),
+        'exit_price_real': None,
+        'entry_spread_pct': pos.get('entry_spread_pct'),
+        'entry_slippage_pct': pos.get('entry_slippage_pct'),
+        'exit_slippage_pct': None,
+        'fees_usd': None,
+        'rejected': pos.get('rejected', False),
+        'note': pos.get('note', '')
+    }
+
+    if pos.get('rejected'):
+        return result
+
+    book = fetch_orderbook(pos['symbol'])
+    if not book or not book.get('bids'):
+        result['note'] = 'carnet indisponible à la sortie'
+        return result
+
+    avg, proceeds, complete = simulate_sell(book, pos['qty'])
+    if avg is None:
+        result['note'] = 'aucun fill possible à la sortie'
+        return result
+
+    exit_fee = proceeds * FEE_RATE
+    pnl_real = (proceeds - exit_fee) - pos['entry_cost']
+
+    result['pnl_usd_real'] = round(pnl_real, 2)
+    result['exit_price_real'] = avg
+    # Positif = pire que le prix théorique de sortie
+    result['exit_slippage_pct'] = round((theoretical_exit_price - avg) / theoretical_exit_price * 100.0, 3)
+    result['fees_usd'] = round(pos['entry_fee'] + exit_fee, 4)
+    if not complete:
+        result['note'] = 'sortie partielle (carnet trop mince)'
+
+    return result
+
+# ==========================================
 # 5. MOTEUR DE SUIVI ET D'ENTRÉE (AVEC ET SANS TRAILING)
 # ==========================================
 def manage_positions(bot, use_trailing):
@@ -209,16 +355,24 @@ def manage_positions(bot, use_trailing):
                     'pnl_usd': round(pnl_usd, 2),
                     'exit_reason': exit_reason
                 }
+
+                # Colonnes réalistes ajoutées après les colonnes d'origine
+                real = realistic_exit(pos, exit_price)
+                trade_record.update(real)
                 
                 bot['history'].append(trade_record)
 
                 # --- SAUVEGARDE DANS LE FICHIER CSV CORRESPONDANT ---
-                filename = "trades_avec_trailing.csv" if use_trailing else "trades_sans_trailing.csv"
+                filename = "trades_avec_trailing_realiste.csv" if use_trailing else "trades_sans_trailing_realiste.csv"
                 df_trade = pd.DataFrame([trade_record])
                 file_exists = os.path.exists(filename)
                 df_trade.to_csv(filename, mode='a', header=not file_exists, index=False)
 
                 print(f"\n🚨 [{bot['name']}] SORTIE {res} ({exit_reason}) | {symbol} | Prix: {exit_price:.10f} | PnL: ${pnl_usd:+.2f}")
+                if real['pnl_usd_real'] is not None:
+                    print(f"   ↳ [RÉALISTE] PnL: ${real['pnl_usd_real']:+.2f} | slippage sortie: {real['exit_slippage_pct']:+.3f}% | frais: ${real['fees_usd']:.2f}")
+                else:
+                    print(f"   ↳ [RÉALISTE] non calculé ({real['note']})")
                 positions_to_remove.append(pos)
 
         except Exception as e:
@@ -249,27 +403,35 @@ def scan_and_enter():
             initial_sl_trailing = close - (atr * ATR_MULTIPLIER)
             initial_sl_percent = close * (1.0 - SL_PERCENT / 100.0)
             
-            # Bot avec trailing
             active_symbols_trailing = [p['symbol'] for p in bot_with_trailing['positions']]
+            active_symbols_without = [p['symbol'] for p in bot_without_trailing['positions']]
+
+            # Fill réaliste calculé une seule fois (même moment, même carnet pour les deux bots)
+            real_fields = {}
+            if symbol not in active_symbols_trailing or symbol not in active_symbols_without:
+                real_fields = realistic_entry(symbol, close)
+
+            # Bot avec trailing
             if symbol not in active_symbols_trailing:
                 bot_with_trailing['positions'].append({
                     'symbol': symbol,
                     'entry': close,
                     'sl': initial_sl_trailing,
                     'size': TRADE_SIZE,
-                    'entry_time': datetime.now()
+                    'entry_time': datetime.now(),
+                    **real_fields
                 })
                 print(f"🚀 [{bot_with_trailing['name']}] ACHAT {symbol} | Entrée: {close:.10f} | SL Initial: {initial_sl_trailing:.10f}")
 
             # Bot sans trailing (avec Stop Loss fixe en %)
-            active_symbols_without = [p['symbol'] for p in bot_without_trailing['positions']]
             if symbol not in active_symbols_without:
                 bot_without_trailing['positions'].append({
                     'symbol': symbol,
                     'entry': close,
                     'sl': initial_sl_percent,
                     'size': TRADE_SIZE,
-                    'entry_time': datetime.now()
+                    'entry_time': datetime.now(),
+                    **real_fields
                 })
                 print(f"🚀 [{bot_without_trailing['name']}] ACHAT {symbol} | Entrée: {close:.10f} | SL Fixe ({SL_PERCENT}%): {initial_sl_percent:.10f}")
 
